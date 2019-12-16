@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+
+
+import rospy
+from std_msgs.msg import Float32
+from std_msgs.msg import String
+from geometry_msgs.msg import Twist
+import sys, select, termios, tty
+
+LIN_VEL_STEP_SIZE = 0.01
+ANG_VEL_STEP_SIZE = 0.1
+teleop_lin_vel = 0.0
+teleop_ang_vel = 0.0
+beerstacker_status = "d"
+
+def teleop_lin(data):
+    global teleop_lin_vel
+    teleop_lin_vel = data.data
+
+def teleop_ang(data):
+    global teleop_ang_vel
+    teleop_ang_vel = data.data
+
+def beerstacker_update(data):
+    global beerstacker_status
+    beerstacker_status = data.data
+
+def makeSimpleProfile(output, input, slop):
+    if input > output:
+        output = min( input, output + slop )
+    elif input < output:
+        output = max( input, output - slop )
+    else:
+        output = input
+
+    return output
+
+
+if __name__=="__main__":
+    rospy.init_node('beerstacker_interceptor')
+    pub = rospy.Publisher('/mario_controller/cmd_vel', Twist, queue_size=10)
+    rospy.Subscriber('/mario_controller/teleop_linear', Float32, teleop_lin)
+    rospy.Subscriber('/mario_controller/teleop_angular', Float32, teleop_ang)
+    rospy.Subscriber('/BeerStacker_data', String, beerstacker_update)
+    target_lin_vel = 0.0
+    target_ang_vel = 0.0
+    control_lin_vel = 0.0
+    control_ang_vel = 0.0
+    while not rospy.is_shutdown():
+        if beerstacker_status == "a":
+            target_lin_vel = -0.2
+            target_ang_vel = 0.0
+        elif beerstacker_status == "b":
+            target_lin_vel = 0.0
+            target_ang_vel = 0.0
+            control_lin_vel = 0.0
+            control_ang_vel = 0.0
+        elif beerstacker_status == "c":
+            target_lin_vel = 0.2
+            target_ang_vel = 0.0
+        elif beerstacker_status == "d":
+            target_lin_vel = teleop_lin_vel
+            target_ang_vel = teleop_ang_vel
+
+        twist = Twist()
+        
+        control_lin_vel = makeSimpleProfile(control_lin_vel, target_lin_vel, (LIN_VEL_STEP_SIZE/2.0))
+        twist.linear.x = control_lin_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
+        control_ang_vel = makeSimpleProfile(control_ang_vel, target_ang_vel, (ANG_VEL_STEP_SIZE/2.0))
+        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = control_ang_vel
+
+        pub.publish(twist)
