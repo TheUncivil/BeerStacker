@@ -17,7 +17,7 @@ def talker():
    data= ser.read(1) 
    rospy.loginfo(data)
    pub.publish(String(data))
-   rospy.sleep(0.2)
+   rospy.sleep(0.001)
 
 
 if __name__ == '__main__':
